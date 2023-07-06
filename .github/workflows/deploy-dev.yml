@@ -1,0 +1,77 @@
+name: APPLICATION DEV DEPLOY
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [deploy-dev]
+
+env:
+  APP_NAME: application
+  NAMESPACE: application-dev
+  ENABLED_INGRESS: false
+  ENABLED_CERTIF: false
+  GCLOUD_SERVICE_ACCOUNT_KEY: ${{ secrets.GCLOUD_SERVICE_ACCOUNT_KEY }}
+  GCS_BUCKET_NAME: ${{ secrets.GCS_BUCKET_NAME }}
+  CHART_NAME: digieye-wkr
+
+jobs:
+  build:
+    #if: github.event.pull_request.merged == true
+    name: build and push image
+    runs-on: ${{ vars.RUNNER }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Set build tag
+        shell: bash
+        run: |
+          echo "BUILD_TAG=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+
+      - name: Build Image
+        uses: ./.github/actions/build-and-push-image
+        with:
+          file: ./Dockerfile
+          context: .
+          tags: digieye/${{ env.APP_NAME}}:${{ env.BUILD_TAG }}
+          dockerhub-username: ${{ secrets.DOCKERHUB_USERNAME }}
+          dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
+          login: true
+          push: true
+
+  deploy:
+    needs: build
+    name: deploy image to k8s
+    runs-on: ${{ vars.RUNNER }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Set build tag
+        shell: bash
+        run: |
+          echo "BUILD_TAG=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+
+      - name: Create values.yaml
+        shell: bash
+        run: |
+          echo '
+          ingress:
+            enabled: ${{ env.ENABLED_INGRESS }}     
+          envFrom:
+            - secretRef:
+                 name: ${{ env.APP_NAME }}
+          ' 1> values.yaml
+
+      - name: Helm Deploy
+        uses: ./.github/actions/deploy-and-debug-image
+        with:
+          kube-config-data: ${{ secrets.KUBE_CONFIG_DATA }}
+          gcloud-service-account-key: ${{ secrets.GCLOUD_SERVICE_ACCOUNT_KEY }}
+          gcs-bucket-name: ${{ secrets.GCS_BUCKET_NAME }}
+          app-name: ${{ env.APP_NAME }}
+          namespace: ${{ env.NAMESPACE }}
+          chart-name: ${{ env.CHART_NAME }}
+          build-tag: ${{ env.BUILD_TAG }}
+          additional-args: --version 0.1.1 -f values.yaml
+          deploy: true
+          debug: true

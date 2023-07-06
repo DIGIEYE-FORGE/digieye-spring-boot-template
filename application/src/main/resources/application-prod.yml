@@ -1,0 +1,9 @@
+kafka:
+   consumer:
+      bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+      group-id: ${KAFKA_CONSUMER_GROUP_ID}
+      topic: ${KAFKA_CONSUMER_TOPIC}
+      auto-commit: ${KAFKA_CONSUMER_AUTO_COMMIT}
+      offset-reset: ${KAFKA_CONSUMER_OFFSET_RESET}
+      
+      

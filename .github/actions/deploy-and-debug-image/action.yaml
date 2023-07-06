@@ -1,0 +1,107 @@
+name: "Deploy image"
+description: "deploys image to k8s"
+inputs:
+  kube-config-data:
+    required: true
+    description: ""
+  gcloud-service-account-key:
+    required: true
+    description: ""
+  gcs-bucket-name:
+    required: true
+    description: ""
+  app-name:
+    required: true
+    description: ""
+  namespace:
+    required: true
+    description: ""
+  enabled-ingress:
+    required: true
+    description: ""
+  enabled-certif:
+    required: true
+    description: ""
+  chart-name:
+    required: true
+    description: ""
+  build-tag:
+    required: true
+    description: ""
+  container-port:
+    required: false
+    description: ""
+    default: "80"
+  debug:
+    required: false
+    default: "false"
+    description: ""
+  deploy:
+    required: false
+    default: "true"
+    description: ""
+  additional-args:
+    required: false
+    default: ""
+    description: ""
+
+runs:
+  using: "composite"
+
+  steps:
+    - name: Setup kubectl
+      uses: ThomasKliszowski/setup-kubectl@v1
+      with:
+        kube-config: ${{ inputs.kube-config-data }}
+
+    - name: Install helm
+      shell: sh
+      run: |
+        curl -LO https://get.helm.sh/helm-v3.8.0-linux-amd64.tar.gz
+        tar -zxvf helm-v3.8.0-linux-amd64.tar.gz
+        sudo mv linux-amd64/helm /usr/local/bin/helm
+        helm version
+
+    - name: Add credentials
+      shell: bash
+      env:
+        GCLOUD_SERVICE_ACCOUNT_KEY: ${{ inputs.gcloud-service-account-key }}
+      run: |
+        echo "$GCLOUD_SERVICE_ACCOUNT_KEY" 1> service-account.json
+      # echo "GOOGLE_APPLICATION_CREDENTIALS=service-account.json" >> $GITHUB_ENV
+
+    - name: Helm config
+      shell: sh
+      env:
+        GCS_BUCKET_NAME: ${{ inputs.gcs-bucket-name }}
+        HELM_GCS_VERSION: 0.3.1
+        GOOGLE_APPLICATION_CREDENTIALS: service-account.json
+      run: |
+        helm plugin install https://github.com/hayorov/helm-gcs --version ${HELM_GCS_VERSION}
+        helm repo add digieye ${{ env.GCS_BUCKET_NAME }}
+
+    - name: Debug
+      env:
+        GOOGLE_APPLICATION_CREDENTIALS: service-account.json
+      shell: sh
+      if: ${{ inputs.debug == 'true' }}
+      run: |
+        helm upgrade --install --dry-run --debug --atomic --timeout 1m ${{ inputs.app-name }} \
+          digieye/${{ inputs.chart-name }}  --namespace ${{ inputs.namespace }} \
+          --set ingress.enabled=${{ inputs.enabled-ingress }} --set ingress.host=${{ inputs.domain-name }} \
+          --set certificate.enabled=${{ inputs.enabled-certif }} --set image.tag=${{ inputs.build-tag }} \
+            --set image.repository=digieye/${{ inputs.app-name }}  \
+            --set image.containerPort=${{ inputs.container-port }} ${{inputs.additional-args}}
+
+    - name: Deploy
+      env:
+        GOOGLE_APPLICATION_CREDENTIALS: service-account.json
+      shell: sh
+      if: ${{ inputs.deploy == 'true' }}
+      run: |
+        helm upgrade --install  --atomic --timeout 9m ${{ inputs.app-name }} \
+          digieye/${{ inputs.chart-name }}  --namespace ${{ inputs.namespace }} \
+          --set ingress.enabled=${{ inputs.enabled-ingress }} --set ingress.host=${{ inputs.domain-name }} \
+          --set certificate.enabled=${{ inputs.enabled-certif }} --set image.tag=${{ inputs.build-tag }} \
+            --set image.repository=digieye/${{ inputs.app-name }} \
+            --set image.containerPort=${{ inputs.container-port }} ${{inputs.additional-args}}

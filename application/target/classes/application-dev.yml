@@ -1,0 +1,7 @@
+kafka:
+   consumer:
+      bootstrap-servers: localhost:9092
+      group-id: grp1
+      topic: test-topic
+      auto-commit: false
+      offset-reset: latest

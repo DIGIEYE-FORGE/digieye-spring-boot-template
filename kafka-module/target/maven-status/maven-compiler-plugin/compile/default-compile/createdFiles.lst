@@ -1,0 +1,6 @@
+org\digieye\kafka\KafkaChannel.class
+org\digieye\kafka\KafkaConfig.class
+org\digieye\kafka\KafkaConsumer.class
+org\digieye\kafka\KafkaMessage.class
+org\digieye\kafka\KafkaSubject.class
+org\digieye\kafka\KafkaTopicSubject.class
